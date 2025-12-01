@@ -8,7 +8,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity, DataUpdateCoordinator
 
-from .const import DOMAIN, TYPE_DIMMER
+from .const import DOMAIN, TYPE_DIMMER, TYPE_RELAY
 from .api import IPBuildingAPI
 
 _LOGGER = logging.getLogger(__name__)
@@ -27,7 +27,7 @@ async def async_setup_entry(
     # Let's just fetch devices once for setup, and then entities can poll or we can add a coordinator later.
     # Given the simplicity, we'll fetch devices now.
     
-    from .const import TYPE_RELAY
+    # from .const import TYPE_RELAY (moved to top)
     
     entities = []
     
@@ -55,8 +55,7 @@ class IPBuildingLight(LightEntity):
     """Representation of an IPBuilding Light (Dimmer)."""
 
     _attr_has_entity_name = True
-    _attr_color_mode = ColorMode.BRIGHTNESS
-    _attr_supported_color_modes = {ColorMode.BRIGHTNESS}
+    # _attr_color_mode and _attr_supported_color_modes are set in __init__
 
     def __init__(self, api: IPBuildingAPI, device: dict) -> None:
         """Initialize the light."""
@@ -75,6 +74,14 @@ class IPBuildingLight(LightEntity):
                 "manufacturer": "IPBuilding",
                 "model": "Group",
             }
+
+        # Determine color mode
+        if self._device.get("Type") == TYPE_DIMMER:
+            self._attr_color_mode = ColorMode.BRIGHTNESS
+            self._attr_supported_color_modes = {ColorMode.BRIGHTNESS}
+        else:
+            self._attr_color_mode = ColorMode.ONOFF
+            self._attr_supported_color_modes = {ColorMode.ONOFF}
             
     @property
     def available(self) -> bool:
@@ -165,6 +172,8 @@ class IPBuildingLight(LightEntity):
     @property
     def brightness(self) -> int | None:
         """Return the brightness of this light between 0..255."""
+        if self._attr_color_mode == ColorMode.ONOFF:
+            return None
         return self._brightness
 
     async def async_turn_on(self, **kwargs: Any) -> None:
