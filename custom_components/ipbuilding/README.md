@@ -4,6 +4,19 @@
 
 This Home Assistant custom component provides integration with the IPBuilding system. It allows you to control dimmers, retrieve sensor data, and trigger custom actions via the IPBuilding REST API.
 
+## Supported Platforms
+
+The integration automatically discovers and creates entities for the following IPBuilding device types:
+
+- **Lights**: Dimmers (Type 2) and Relays with Kind=1 (Type 1)
+- **Switches**: Relays (Type 1) with Kind≠1 (outlets, locks, fans, valves, etc.)
+- **Sensors**: 
+  - Time sensors (Type 56)
+  - Regime sensors (Type 200)
+  - Power sensors (automatically created for devices with `Watt` attribute)
+- **Buttons**: Button devices (Type 50)
+- **Scenes**: Sphere (Type 100) and TempSphere (Type 101) devices
+
 ## Important API Endpoints
 
 ### Dimmer Control
@@ -25,6 +38,114 @@ These links point to the official Postman documentation for the IPBuilding REST 
 
 The component exposes services that wrap these API calls. Refer to the component's `services.yaml` (if present) or the code in `api.py` for the exact service names and parameters.
 
+### Entity Features
+
+#### State Visibility
+For a cleaner UI, certain entity types have their state display hidden by default:
+- **Buttons**: All button entities have state display disabled (`entity_registry_visible_default = False`)
+- **Power Sensors**: Energy/power sensors created from the `Watt` attribute also hide state display by default
+
+These entities remain functional but don't clutter the dashboard with unnecessary state information.
+
+#### Visible Property
+The integration respects the `Visible` property from the IPBuilding API. Entities with `"Visible": false` will be marked as unavailable in Home Assistant.
+
+#### Power Monitoring
+The component automatically creates power sensor entities for any Relay or Dimmer device that has a `Watt` attribute. These sensors:
+- Use the `sensor` device class for power measurement
+- Report power in Watts (W)
+- Can be used in Home Assistant's Energy Dashboard
+- Are linked to the same device group as their parent entity
+
+#### Device Grouping
+All entities are automatically grouped by their IPBuilding `Group` property:
+- Each entity is linked to a device based on `Group.ID` and `Group.Name`
+- This allows you to organize entities by room/area in Home Assistant
+- The device manufacturer is set to "IPBuilding"
+
+#### Entity Attributes
+All entities expose the following IPBuilding properties as attributes:
+- `IpAddress`: IP address of the physical device
+- `Port`: Port number
+- `Protocol`: Communication protocol
+- `ID`: IPBuilding device ID
+- `Status`: Current device status
+- `Output`: Output configuration
+- `Kind`: Device kind/subtype (see Kinds table below)
+
 ## Development
 
 For local development, see the top‑level `DEVELOPMENT.md` which contains instructions on setting up a virtual environment and running Home Assistant locally.
+
+## API Documentation
+
+### Postman Collection
+A fork of the original Postman collection is available here:
+https://web.postman.co/workspace/baebca0c-0802-4854-833a-7eb222d1a9b7/collection/1366031-733ffb24-a5bd-4883-a3cb-8a04fbc7e7a2
+
+### Types
+
+| Type | Object          |
+| ---- | --------------- |
+| 1    | Relais          |
+| 2    | Dimmer          |
+| 3    | Dmx             |
+| 40   | EnergyCounter   |
+| 41   | EnergyMeter     |
+| 50   | Button          |
+| 51   | Temperature     |
+| 52   | Detector        |
+| 53   | Analog sensor   |
+| 54   | KMI             |
+| 55   | Weather station |
+| 56   | Time of system  |
+| 60   | Led             |
+| 70   | AccessReader    |
+| 80   | AccessKey       |
+| 100  | Sphere          |
+| 101  | TempSphere      |
+| 102  | Prog            |
+| 103  | AccessControl   |
+| 150  | Script          |
+| 200  | Regime          |
+
+### Kinds
+
+The `Kind` property determines the specific subtype of a device:
+
+| Type | Object              |
+| ---- | ------------------- |
+| 1    | Licht               |
+| 2    | Stopkontakt         |
+| 3    | Automatisering      |
+| 4    | Slot                |
+| 5    | Ventilator          |
+| 6    | Klep                |
+| 7    | Temperatuur         |
+| 8    | Niet van toepassing |
+
+
+### Example Device Object
+
+```json
+{
+    "__type": "Relais:IPBuilding",
+    "ID": 547,
+    "Type": 1,
+    "Kind": 1,
+    "Description": "Keuken LED [30.1.1]",
+    "Group": {
+        "ID": 4,
+        "Name": "Keuken"
+    },
+    "IpAddress": "10.10.1.30",
+    "Port": 1001,
+    "Protocol": 0,
+    "Visible": true,
+    "MobileIcon": 0,
+    "MobileVisible": true,
+    "Output": 0,
+    "Status": 0,
+    "Watt": 0
+}
+```

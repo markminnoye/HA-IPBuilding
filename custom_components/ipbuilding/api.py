@@ -75,7 +75,7 @@ class IPBuildingAPI:
             async with async_timeout.timeout(10):
                 async with self._session.get(url, params=params) as response:
                     response.raise_for_status()
-                    return await response.json()
+                    return await response.json(content_type=None)
         except Exception as e:
             _LOGGER.error("Error setting value for device %s: %s", device_id, e)
             raise

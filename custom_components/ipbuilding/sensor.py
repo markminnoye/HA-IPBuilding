@@ -1,12 +1,14 @@
 """Sensor platform for IPBuilding."""
 import logging
 
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import SensorEntity, SensorDeviceClass, SensorStateClass
+from homeassistant.const import UnitOfPower
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from typing import Any
 
-from .const import DOMAIN, TYPE_TIME, TYPE_REGIME
+from .const import DOMAIN, TYPE_TIME, TYPE_REGIME, TYPE_RELAY, TYPE_DIMMER
 from .api import IPBuildingAPI
 
 _LOGGER = logging.getLogger(__name__)
@@ -37,6 +39,17 @@ async def async_setup_entry(
     except Exception as e:
         _LOGGER.error("Failed to fetch regime sensors: %s", e)
 
+    # Fetch Power sensors (from Relays and Dimmers)
+    for type_id in [TYPE_RELAY, TYPE_DIMMER]:
+        try:
+            devices = await api.get_devices(type_id)
+            for device in devices:
+                # Only create power sensor if Watt field exists (and maybe > 0, but 0 is valid)
+                if "Watt" in device:
+                    entities.append(IPBuildingPowerSensor(api, device))
+        except Exception as e:
+            _LOGGER.error("Failed to fetch devices for power sensors (type %s): %s", type_id, e)
+
     async_add_entities(entities, True)
 
 
@@ -53,12 +66,42 @@ class IPBuildingSensor(SensorEntity):
         self._attr_unique_id = f"ipbuilding_sensor_{device.get('ID') or device.get('id')}"
         self._attr_name = device.get("Description") or device.get("name") or f"{sensor_type} {device.get('ID') or device.get('id')}"
         self._attr_native_value = device.get("Value") or device.get("value")
+        
+        # Hide state display by default
+        self._attr_entity_registry_visible_default = False
+        
+        # Device Info
+        if group := device.get("Group"):
+            self._attr_device_info = {
+                "identifiers": {(DOMAIN, f"group_{group.get('ID')}")},
+                "name": group.get("Name"),
+                "manufacturer": "IPBuilding",
+                "model": "Group",
+            }
+
+    @property
+    def available(self) -> bool:
+        """Return if entity is available."""
+        # Use Visible property from API, default to True
+        return self._device.get("Visible", True)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the state attributes."""
+        return {
+            "IpAddress": self._device.get("IpAddress"),
+            "Port": self._device.get("Port"),
+            "Protocol": self._device.get("Protocol"),
+            "ID": self._device.get("ID") or self._device.get("id"),
+            "Status": self._device.get("Status"),
+            "Output": self._device.get("Output"),
+            "Kind": self._device.get("Kind"),
+        }
 
     async def async_update(self) -> None:
         """Fetch new state data for this sensor."""
         try:
             # Re-fetch specific type list to find this device
-            # This is inefficient but simple for now.
             type_id = TYPE_TIME if self._sensor_type == "Time" else TYPE_REGIME
             devices = await self._api.get_devices(type_id)
             for d in devices:
@@ -72,3 +115,62 @@ class IPBuildingSensor(SensorEntity):
             
         except Exception as e:
             _LOGGER.error("Error updating sensor %s: %s", self.entity_id, e)
+
+
+class IPBuildingPowerSensor(SensorEntity):
+    """Representation of an IPBuilding Power Sensor."""
+
+    _attr_has_entity_name = True
+    _attr_device_class = SensorDeviceClass.POWER
+    _attr_native_unit_of_measurement = UnitOfPower.WATT
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, api: IPBuildingAPI, device: dict) -> None:
+        """Initialize the power sensor."""
+        self._api = api
+        self._device = device
+        self._attr_unique_id = f"ipbuilding_power_{device.get('ID') or device.get('id')}"
+        self._attr_name = f"{device.get('Description') or device.get('name')} Power"
+        self._attr_native_value = device.get("Watt")
+        
+        # Hide state display by default
+        self._attr_entity_registry_visible_default = False
+
+        # Device Info (Link to the same device group)
+        if group := device.get("Group"):
+            self._attr_device_info = {
+                "identifiers": {(DOMAIN, f"group_{group.get('ID')}")},
+                "name": group.get("Name"),
+                "manufacturer": "IPBuilding",
+                "model": "Group",
+            }
+
+    @property
+    def available(self) -> bool:
+        """Return if entity is available."""
+        # Use Visible property from API, default to True
+        return self._device.get("Visible", True)
+
+    async def async_update(self) -> None:
+        """Fetch new state data for this sensor."""
+        try:
+            # We need to know the type to re-fetch.
+            # This is a bit tricky since we don't store the type explicitly in __init__ 
+            # but we can guess or store it.
+            # For now, let's try to infer from the device data or store it.
+            # Ideally we should pass type_id to __init__.
+            # But let's check 'Type' field in device.
+            type_id = int(self._device.get("Type") or self._device.get("type") or TYPE_RELAY)
+            
+            devices = await self._api.get_devices(type_id)
+            for d in devices:
+                dev_id = d.get('ID') or d.get('id')
+                cur_id = self._device.get('ID') or self._device.get('id')
+                if dev_id == cur_id:
+                    self._device = d
+                    break
+            
+            self._attr_native_value = self._device.get("Watt")
+            
+        except Exception as e:
+            _LOGGER.error("Error updating power sensor %s: %s", self.entity_id, e)

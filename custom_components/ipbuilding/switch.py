@@ -28,6 +28,9 @@ async def async_setup_entry(
 
     entities = []
     for device in devices:
+        # Skip Kind 1 (Light) as they should be handled by the light platform
+        if device.get("Kind") == 1:
+            continue
         entities.append(IPBuildingSwitch(api, device))
 
     async_add_entities(entities, True)
@@ -35,7 +38,7 @@ async def async_setup_entry(
 
 class IPBuildingSwitch(SwitchEntity):
     """Representation of an IPBuilding Switch (Relay)."""
-
+        
     _attr_has_entity_name = True
 
     def __init__(self, api: IPBuildingAPI, device: dict) -> None:
@@ -45,6 +48,59 @@ class IPBuildingSwitch(SwitchEntity):
         self._attr_unique_id = f"ipbuilding_relay_{device.get('ID') or device.get('id')}"
         self._attr_name = device.get("Description") or device.get("name") or f"Relay {device.get('ID') or device.get('id')}"
         self._state = False
+        
+        # Default to disabled in registry, but enabled in HA logic
+        #self._attr_entity_registry_enabled_default = False
+        
+        # Handle Kind
+        kind = device.get("Kind")
+        if kind == 2: # Socket
+            self._attr_device_class = "outlet"
+            self._attr_icon = "mdi:power-socket-eu"
+        elif kind == 4: # Lock
+            self._attr_icon = "mdi:lock"
+        elif kind == 5: # Fan
+            self._attr_icon = "mdi:fan"
+        elif kind == 6: # Valve
+            self._attr_icon = "mdi:valve"
+        elif kind == 52: # Detector (Smoke?) - Check if this is correct mapping or if it needs to be specific
+             # User requested smoke detector icon. Assuming Kind 52 might be detector or specific device.
+             # If Kind is not enough, we might need to check Description or Type.
+             # But user said "relais die een licht bedienen... rookmelder = smoke detector".
+             # If smoke detector is a relay (Type 1), we check here.
+             pass
+
+        # Check for smoke detector in description or kind if applicable
+        if "smoke" in self._attr_name.lower() or "rook" in self._attr_name.lower():
+             self._attr_icon = "mdi:smoke-detector-variant"
+        
+        # Device Info
+        if group := device.get("Group"):
+            self._attr_device_info = {
+                "identifiers": {(DOMAIN, f"group_{group.get('ID')}")},
+                "name": group.get("Name"),
+                "manufacturer": "IPBuilding",
+                "model": "Group",
+            }
+
+    @property
+    def available(self) -> bool:
+        """Return if entity is available."""
+        # Use Visible property from API, default to True
+        return self._device.get("Visible", True)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the state attributes."""
+        return {
+            "IpAddress": self._device.get("IpAddress"),
+            "Port": self._device.get("Port"),
+            "Protocol": self._device.get("Protocol"),
+            "ID": self._device.get("ID") or self._device.get("id"),
+            "Status": self._device.get("Status"),
+            "Output": self._device.get("Output"),
+            "Kind": self._device.get("Kind"),
+        }
 
     async def async_update(self) -> None:
         """Fetch new state data for this switch."""
