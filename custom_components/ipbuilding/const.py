@@ -7,7 +7,6 @@ CONF_HOST = "host"
 CONF_PORT = "port"
 
 # Device Types
-# Device Types
 TYPE_RELAY = 1
 TYPE_DIMMER = 2
 TYPE_DMX = 3
