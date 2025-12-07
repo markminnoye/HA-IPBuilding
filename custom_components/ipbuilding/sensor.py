@@ -131,7 +131,7 @@ class IPBuildingPowerSensor(SensorEntity):
         self._device = device
         self._attr_unique_id = f"ipbuilding_power_{device.get('ID') or device.get('id')}"
         self._attr_name = f"{device.get('Description') or device.get('name')} Power"
-        self._attr_native_value = device.get("Watt")
+        self._attr_native_value = self._calculate_power()
         
         # Hide state display by default
         self._attr_entity_registry_visible_default = False
@@ -151,15 +151,36 @@ class IPBuildingPowerSensor(SensorEntity):
         # Use Visible property from API, default to True
         return self._device.get("Visible", True)
 
+    def _calculate_power(self) -> float:
+        """Calculate the power usage based on state."""
+        rated_watt = float(self._device.get("Watt") or 0)
+        
+        val = self._device.get("Status")
+        if val is None:
+            val = self._device.get("status")
+        if val is None:
+            val = self._device.get("Value")
+        if val is None:
+            val = self._device.get("value")
+
+        if isinstance(val, bool):
+            val = 1 if val else 0
+        else:
+            val = int(val or 0)
+
+        type_id = int(self._device.get("Type") or self._device.get("type") or 0)
+        
+        if type_id == TYPE_DIMMER:
+             # Dimmer value is 0-100
+             return round(rated_watt * (val / 100.0), 1)
+        
+        # Binary ON/OFF
+        return rated_watt if val > 0 else 0
+
     async def async_update(self) -> None:
         """Fetch new state data for this sensor."""
         try:
             # We need to know the type to re-fetch.
-            # This is a bit tricky since we don't store the type explicitly in __init__ 
-            # but we can guess or store it.
-            # For now, let's try to infer from the device data or store it.
-            # Ideally we should pass type_id to __init__.
-            # But let's check 'Type' field in device.
             type_id = int(self._device.get("Type") or self._device.get("type") or TYPE_RELAY)
             
             devices = await self._api.get_devices(type_id)
@@ -170,7 +191,7 @@ class IPBuildingPowerSensor(SensorEntity):
                     self._device = d
                     break
             
-            self._attr_native_value = self._device.get("Watt")
+            self._attr_native_value = self._calculate_power()
             
         except Exception as e:
             _LOGGER.error("Error updating power sensor %s: %s", self.entity_id, e)
