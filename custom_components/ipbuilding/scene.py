@@ -54,13 +54,14 @@ class IPBuildingScene(Scene):
         self._attr_name = device.get("Description") or device.get("name") or f"Scene {device.get('ID') or device.get('id')}"
         
         # Device Info
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, f"scene_{device.get('ID') or device.get('id')}")},
+            "name": self._attr_name,
+            "manufacturer": "IPBuilding",
+            "model": "Scene",
+        }
         if group := device.get("Group"):
-            self._attr_device_info = {
-                "identifiers": {(DOMAIN, f"group_{group.get('ID')}")},
-                "name": group.get("Name"),
-                "manufacturer": "IPBuilding",
-                "model": "Group",
-            }
+            self._attr_device_info["suggested_area"] = group.get("Name")
 
     @property
     def available(self) -> bool:

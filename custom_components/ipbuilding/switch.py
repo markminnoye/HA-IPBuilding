@@ -75,13 +75,14 @@ class IPBuildingSwitch(SwitchEntity):
              self._attr_icon = "mdi:smoke-detector-variant"
         
         # Device Info
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, f"output_{device.get('ID') or device.get('id')}")},
+            "name": self._attr_name,
+            "manufacturer": "IPBuilding",
+            "model": "Relay",
+        }
         if group := device.get("Group"):
-            self._attr_device_info = {
-                "identifiers": {(DOMAIN, f"group_{group.get('ID')}")},
-                "name": group.get("Name"),
-                "manufacturer": "IPBuilding",
-                "model": "Group",
-            }
+            self._attr_device_info["suggested_area"] = group.get("Name")
 
     @property
     def available(self) -> bool:

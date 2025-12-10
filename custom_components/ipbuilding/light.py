@@ -67,13 +67,14 @@ class IPBuildingLight(LightEntity):
         self._brightness = 0
         
         # Device Info
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, f"output_{device.get('ID') or device.get('id')}")},
+            "name": self._attr_name,
+            "manufacturer": "IPBuilding",
+            "model": "Dimmer" if self._device.get("Type") == TYPE_DIMMER else "Relay",
+        }
         if group := device.get("Group"):
-            self._attr_device_info = {
-                "identifiers": {(DOMAIN, f"group_{group.get('ID')}")},
-                "name": group.get("Name"),
-                "manufacturer": "IPBuilding",
-                "model": "Group",
-            }
+            self._attr_device_info["suggested_area"] = group.get("Name")
 
         # Determine color mode
         if self._device.get("Type") == TYPE_DIMMER:

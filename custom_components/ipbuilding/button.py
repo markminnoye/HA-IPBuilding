@@ -52,13 +52,14 @@ class IPBuildingButton(ButtonEntity):
         self._attr_entity_registry_visible_default = False
         
         # Device Info
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, f"button_{device.get('ID') or device.get('id')}")},
+            "name": self._attr_name,
+            "manufacturer": "IPBuilding",
+            "model": "Button",
+        }
         if group := device.get("Group"):
-            self._attr_device_info = {
-                "identifiers": {(DOMAIN, f"group_{group.get('ID')}")},
-                "name": group.get("Name"),
-                "manufacturer": "IPBuilding",
-                "model": "Group",
-            }
+            self._attr_device_info["suggested_area"] = group.get("Name")
             
     @property
     def available(self) -> bool:

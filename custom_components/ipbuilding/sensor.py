@@ -71,13 +71,14 @@ class IPBuildingSensor(SensorEntity):
         self._attr_entity_registry_visible_default = False
         
         # Device Info
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, f"sensor_{device.get('ID') or device.get('id')}")},
+            "name": self._attr_name,
+            "manufacturer": "IPBuilding",
+            "model": sensor_type,
+        }
         if group := device.get("Group"):
-            self._attr_device_info = {
-                "identifiers": {(DOMAIN, f"group_{group.get('ID')}")},
-                "name": group.get("Name"),
-                "manufacturer": "IPBuilding",
-                "model": "Group",
-            }
+            self._attr_device_info["suggested_area"] = group.get("Name")
 
     @property
     def available(self) -> bool:
@@ -136,14 +137,15 @@ class IPBuildingPowerSensor(SensorEntity):
         # Hide state display by default
         self._attr_entity_registry_visible_default = False
 
-        # Device Info (Link to the same device group)
+        # Device Info
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, f"output_{device.get('ID') or device.get('id')}")},
+            "name": device.get("Description") or device.get("name") or f"Device {device.get('ID') or device.get('id')}",
+            "manufacturer": "IPBuilding",
+            "model": "Dimmer" if int(device.get("Type") or 0) == TYPE_DIMMER else "Relay",
+        }
         if group := device.get("Group"):
-            self._attr_device_info = {
-                "identifiers": {(DOMAIN, f"group_{group.get('ID')}")},
-                "name": group.get("Name"),
-                "manufacturer": "IPBuilding",
-                "model": "Group",
-            }
+            self._attr_device_info["suggested_area"] = group.get("Name")
 
     @property
     def available(self) -> bool:
