@@ -6,6 +6,7 @@ from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity, DataUpdateCoordinator
 
 from .const import DOMAIN, TYPE_RELAY
 from .api import IPBuildingAPI
@@ -18,36 +19,38 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the IPBuilding switch platform."""
-    api: IPBuildingAPI = hass.data[DOMAIN][entry.entry_id]
+    data = hass.data[DOMAIN][entry.entry_id]
+    api: IPBuildingAPI = data["api"]
+    coordinator: DataUpdateCoordinator = data["coordinator"]
 
-    try:
-        devices = await api.get_devices(TYPE_RELAY)
-    except Exception as e:
-        _LOGGER.error("Failed to fetch relays: %s", e)
-        return
-
+    # Iterate coordinator data
     entities = []
-    for device in devices:
-        # Skip Kind 1 (Light) as they should be handled by the light platform
-        if device.get("Kind") == 1:
-            continue
-        entities.append(IPBuildingSwitch(api, device))
+    if coordinator.data:
+        from .const import TYPE_RELAY
+        for dev_id, device in coordinator.data.items():
+            if int(device.get("Type") or 0) == TYPE_RELAY:
+                # Skip Kind 1 (Light) - handled in light.py
+                if device.get("Kind") == 1:
+                    continue
+                entities.append(IPBuildingSwitch(coordinator, api, device))
 
-    async_add_entities(entities, True)
+    async_add_entities(entities)
 
 
-class IPBuildingSwitch(SwitchEntity):
+class IPBuildingSwitch(CoordinatorEntity, SwitchEntity):
     """Representation of an IPBuilding Switch (Relay)."""
         
     _attr_has_entity_name = True
 
-    def __init__(self, api: IPBuildingAPI, device: dict) -> None:
+    def __init__(self, coordinator: DataUpdateCoordinator, api: IPBuildingAPI, device: dict) -> None:
         """Initialize the switch."""
+        super().__init__(coordinator)
         self._api = api
-        self._device = device
-        self._attr_unique_id = f"ipbuilding_relay_{device.get('ID') or device.get('id')}"
-        self._attr_name = device.get("Description") or device.get("name") or f"Relay {device.get('ID') or device.get('id')}"
-        self._state = False
+        self._device_id = device.get("ID") or device.get("id")
+        self._initial_device_data = device
+        
+        self._attr_unique_id = f"ipbuilding_relay_{self._device_id}"
+        self._attr_name = device.get("Description") or device.get("name") or f"Relay {self._device_id}"
         
         # Default to disabled in registry, but enabled in HA logic
         #self._attr_entity_registry_enabled_default = False
@@ -76,7 +79,7 @@ class IPBuildingSwitch(SwitchEntity):
         
         # Device Info
         self._attr_device_info = {
-            "identifiers": {(DOMAIN, f"output_{device.get('ID') or device.get('id')}")},
+            "identifiers": {(DOMAIN, f"output_{self._device_id}")},
             "name": self._attr_name,
             "manufacturer": "IPBuilding",
             "model": "Relay",
@@ -86,67 +89,45 @@ class IPBuildingSwitch(SwitchEntity):
             self._attr_device_info["suggested_area"] = group.get("Name")
 
     @property
+    def _device_data(self) -> dict:
+        """Get the latest device data from coordinator."""
+        return self.coordinator.data.get(self._device_id, self._initial_device_data)
+
+    @property
     def available(self) -> bool:
         """Return if entity is available."""
         # Use Visible property from API, default to True
-        return self._device.get("Visible", True)
+        return self.coordinator.last_update_success and self._device_data.get("Visible", True)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return the state attributes."""
+        d = self._device_data
         return {
-            "IpAddress": self._device.get("IpAddress"),
-            "Port": self._device.get("Port"),
-            "Protocol": self._device.get("Protocol"),
-            "ID": self._device.get("ID") or self._device.get("id"),
-            "Status": self._device.get("Status"),
-            "Output": self._device.get("Output"),
-            "Kind": self._device.get("Kind"),
+            "IpAddress": d.get("IpAddress"),
+            "Port": d.get("Port"),
+            "Protocol": d.get("Protocol"),
+            "ID": self._device_id,
+            "Status": d.get("Status"),
+            "Output": d.get("Output"),
+            "Kind": d.get("Kind"),
         }
-
-    async def async_update(self) -> None:
-        """Fetch new state data for this switch."""
-        try:
-            devices = await self._api.get_devices(TYPE_RELAY)
-            for d in devices:
-                dev_id = d.get('ID') or d.get('id')
-                cur_id = self._device.get('ID') or self._device.get('id')
-                if dev_id == cur_id:
-                    self._device = d
-                    break
-            
-            # Assumption: 'value' is 0 or 1 (or >0)
-            # Check Status (boolean) or Value (int)
-            val = self._device.get("Status")
-            if val is None:
-                val = self._device.get("status")
-            if val is None:
-                val = self._device.get("Value")
-            if val is None:
-                val = self._device.get("value")
-            
-            # Convert to int/bool
-            if isinstance(val, bool):
-                self._state = val
-            else:
-                self._state = int(val or 0) > 0
-            
-        except Exception as e:
-            _LOGGER.error("Error updating switch %s: %s", self.entity_id, e)
 
     @property
     def is_on(self) -> bool:
         """Return true if switch is on."""
-        return self._state
+        d = self._device_data
+        val = d.get("Status") or d.get("status") or d.get("Value") or d.get("value")
+        if isinstance(val, bool):
+            return val
+        return int(val or 0) > 0
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the switch on."""
-        await self._api.set_value(self._device.get('ID') or self._device.get('id'), 1, "ON") # Assuming 1 is ON
-        self._state = True
-        self.async_write_ha_state()
+        await self._api.set_value(self._device_id, 1, "ON") # Assuming 1 is ON
+        await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the switch off."""
-        await self._api.set_value(self._device.get('ID') or self._device.get('id'), 0, "OFF") # Assuming 0 is OFF
-        self._state = False
-        self.async_write_ha_state()
+        await self._api.set_value(self._device_id, 0, "OFF") # Assuming 0 is OFF
+        await self.coordinator.async_request_refresh()
