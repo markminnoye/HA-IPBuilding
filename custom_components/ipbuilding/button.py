@@ -33,7 +33,7 @@ async def async_setup_entry(
     for device in devices:
         entities.append(IPBuildingButton(coordinator_slow, api, device))
 
-    async_add_entities(entities, True)
+    async_add_entities(entities)
 
 
 class IPBuildingButton(CoordinatorEntity, ButtonEntity):

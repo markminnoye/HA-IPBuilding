@@ -58,7 +58,7 @@ async def async_setup_entry(
         except Exception as e:
              _LOGGER.error("Failed to fetch devices for power sensors (type %s): %s", type_id, e)
 
-    async_add_entities(entities, True)
+    async_add_entities(entities)
 
 
 class IPBuildingSensor(CoordinatorEntity, SensorEntity):

@@ -36,7 +36,7 @@ async def async_setup_entry(
             continue
         entities.append(IPBuildingSwitch(coordinator_fast, api, device))
 
-    async_add_entities(entities, True)
+    async_add_entities(entities)
 
 
 class IPBuildingSwitch(CoordinatorEntity, SwitchEntity):

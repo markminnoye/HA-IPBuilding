@@ -42,7 +42,7 @@ async def async_setup_entry(
     except Exception as e:
         _LOGGER.error("Failed to fetch relays for lights: %s", e)
 
-    async_add_entities(entities, True)
+    async_add_entities(entities)
 
 
 class IPBuildingLight(CoordinatorEntity, LightEntity):
