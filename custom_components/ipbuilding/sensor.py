@@ -76,6 +76,7 @@ class IPBuildingSensor(SensorEntity):
             "name": self._attr_name,
             "manufacturer": "IPBuilding",
             "model": sensor_type,
+            "via_device": (DOMAIN, "hub_sensors"),
         }
         if group := device.get("Group"):
             self._attr_device_info["suggested_area"] = group.get("Name")
@@ -138,11 +139,13 @@ class IPBuildingPowerSensor(SensorEntity):
         self._attr_entity_registry_visible_default = False
 
         # Device Info
+        hub = "hub_dimmers" if int(device.get("Type") or 0) == TYPE_DIMMER else "hub_relays"
         self._attr_device_info = {
             "identifiers": {(DOMAIN, f"output_{device.get('ID') or device.get('id')}")},
             "name": device.get("Description") or device.get("name") or f"Device {device.get('ID') or device.get('id')}",
             "manufacturer": "IPBuilding",
             "model": "Dimmer" if int(device.get("Type") or 0) == TYPE_DIMMER else "Relay",
+            "via_device": (DOMAIN, hub),
         }
         if group := device.get("Group"):
             self._attr_device_info["suggested_area"] = group.get("Name")

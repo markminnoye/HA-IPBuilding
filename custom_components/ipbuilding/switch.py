@@ -80,6 +80,7 @@ class IPBuildingSwitch(SwitchEntity):
             "name": self._attr_name,
             "manufacturer": "IPBuilding",
             "model": "Relay",
+            "via_device": (DOMAIN, "hub_relays"),
         }
         if group := device.get("Group"):
             self._attr_device_info["suggested_area"] = group.get("Name")

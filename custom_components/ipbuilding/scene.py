@@ -59,6 +59,7 @@ class IPBuildingScene(Scene):
             "name": self._attr_name,
             "manufacturer": "IPBuilding",
             "model": "Scene",
+            "via_device": (DOMAIN, "hub_scenes"),
         }
         if group := device.get("Group"):
             self._attr_device_info["suggested_area"] = group.get("Name")
