@@ -143,38 +143,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Forward entry setups
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    return True        ("hub_dimmers", "IPBuilding Dimmers", [TYPE_DIMMER]),
-        ("hub_relays", "IPBuilding Relays", [TYPE_RELAY]),
-        ("hub_dmx", "IPBuilding DMX", [TYPE_DMX]),
-        ("hub_led", "IPBuilding LED", [TYPE_LED]),
-        ("hub_buttons", "IPBuilding Buttons", [TYPE_BUTTON]),
-        ("hub_scenes", "IPBuilding Scenes", [TYPE_SPHERE, TYPE_TEMP_SPHERE]),
-        ("hub_detectors", "IPBuilding Detectors", [TYPE_DETECTOR]),
-        ("hub_temperature", "IPBuilding Temperature", [TYPE_TEMPERATURE]),
-        ("hub_weather", "IPBuilding Weather", [TYPE_KMI, TYPE_WEATHER_STATION]),
-        ("hub_energy", "IPBuilding Energy", [TYPE_ENERGY_COUNTER, TYPE_ENERGY_METER]),
-        ("hub_access", "IPBuilding Access", [TYPE_ACCESS_READER, TYPE_ACCESS_KEY, TYPE_ACCESS_CONTROL]),
-        ("hub_analog", "IPBuilding Analog", [TYPE_ANALOG_SENSOR]),
-        ("hub_system", "IPBuilding System", [TYPE_TIME, TYPE_REGIME]),
-        ("hub_logic", "IPBuilding Logic", [TYPE_PROG, TYPE_SCRIPT]),
-    ]
-    
-    for hub_id, hub_name, types in hub_definitions:
-        # Check if any of the types for this hub are present
-        if any(t in present_types for t in types):
-            dev_reg.async_get_or_create(
-                config_entry_id=entry.entry_id,
-                identifiers={(DOMAIN, hub_id)},
-                name=hub_name,
-                manufacturer="IPBuilding",
-                model="System Hub",
-            )
-        # Compatibility: If we previously created "hub_sensors" and now use specific ones,
-        # we might want to migrate or just assume new setup. 
-        # For Time/Regime we moved to "hub_system".
-
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-
     return True
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
