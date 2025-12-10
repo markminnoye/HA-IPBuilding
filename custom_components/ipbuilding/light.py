@@ -71,13 +71,11 @@ class IPBuildingLight(CoordinatorEntity, LightEntity):
             self._attr_supported_color_modes = {ColorMode.ONOFF}
             
         # Device Info setup...
-        hub = "hub_dimmers" if device.get("Type") == TYPE_DIMMER else "hub_relays"
         self._attr_device_info = {
             "identifiers": {(DOMAIN, f"output_{self._device_id}")},
             "name": self._attr_name,
             "manufacturer": "IPBuilding",
             "model": "Dimmer" if device.get("Type") == TYPE_DIMMER else "Relay",
-            "via_device": (DOMAIN, hub),
         }
         if group := device.get("Group"):
             self._attr_device_info["suggested_area"] = group.get("Name")

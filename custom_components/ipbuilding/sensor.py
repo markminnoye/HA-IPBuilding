@@ -34,7 +34,7 @@ async def async_setup_entry(
     try:
         time_devices = await api.get_devices(TYPE_TIME)
         for device in time_devices:
-            entities.append(IPBuildingSensor(coordinator_fast, api, device, "Time", "hub_system"))
+            entities.append(IPBuildingSensor(coordinator_fast, api, device, "Time"))
     except Exception as e:
         _LOGGER.error("Failed to fetch time sensors: %s", e)
 
@@ -42,7 +42,7 @@ async def async_setup_entry(
     try:
         regime_devices = await api.get_devices(TYPE_REGIME)
         for device in regime_devices:
-            entities.append(IPBuildingSensor(coordinator_slow, api, device, "Regime", "hub_system"))
+            entities.append(IPBuildingSensor(coordinator_slow, api, device, "Regime"))
     except Exception as e:
         _LOGGER.error("Failed to fetch regime sensors: %s", e)
 
@@ -66,7 +66,7 @@ class IPBuildingSensor(CoordinatorEntity, SensorEntity):
 
     _attr_has_entity_name = True
 
-    def __init__(self, coordinator: DataUpdateCoordinator, api: IPBuildingAPI, device: dict, sensor_type: str, hub: str) -> None:
+    def __init__(self, coordinator: DataUpdateCoordinator, api: IPBuildingAPI, device: dict, sensor_type: str) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator)
         self._api = api
@@ -85,7 +85,7 @@ class IPBuildingSensor(CoordinatorEntity, SensorEntity):
             "name": self._attr_name,
             "manufacturer": "IPBuilding",
             "model": sensor_type,
-            "via_device": (DOMAIN, hub),
+            "model": sensor_type,
         }
         if group := device.get("Group"):
             self._attr_device_info["suggested_area"] = group.get("Name")
@@ -143,13 +143,11 @@ class IPBuildingPowerSensor(CoordinatorEntity, SensorEntity):
         self._attr_entity_registry_visible_default = False
 
         # Device Info
-        hub = "hub_dimmers" if int(device.get("Type") or 0) == TYPE_DIMMER else "hub_relays"
         self._attr_device_info = {
             "identifiers": {(DOMAIN, f"output_{self._device_id}")},
             "name": device.get("Description") or device.get("name") or f"Device {self._device_id}",
             "manufacturer": "IPBuilding",
             "model": "Dimmer" if int(device.get("Type") or 0) == TYPE_DIMMER else "Relay",
-            "via_device": (DOMAIN, hub),
         }
         if group := device.get("Group"):
             self._attr_device_info["suggested_area"] = group.get("Name")
