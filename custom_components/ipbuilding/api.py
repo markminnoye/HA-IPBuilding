@@ -15,12 +15,18 @@ class IPBuildingAPI:
         self._session = session
         self._base_url = f"http://{host}:{port}/api/v1"
 
-    async def get_devices(self, type_id: int = None):
-        """Get devices, optionally filtered by type."""
+    async def get_devices(self, types: list[int] | int = None):
+        """Get devices, optionally filtered by type(s)."""
         url = f"{self._base_url}/comp/items"
         params = {}
-        if type_id is not None:
-            params["types"] = type_id
+        if types is not None:
+            if isinstance(types, list):
+                # Join types with comma if API supports it, otherwise this might need multiple calls or loop
+                # Assuming API supports "types=1,2" or similar. If not, client side filtering on full list is fallback.
+                # Based on user request, let's try comma separated.
+                params["types"] = ",".join(map(str, types))
+            else:
+                params["types"] = types
 
         try:
             async with async_timeout.timeout(10):
@@ -30,21 +36,18 @@ class IPBuildingAPI:
                     
                     # Ensure we have a list
                     if not isinstance(data, list):
-                        # If the API returns a wrapper, try to extract the list. 
-                        # But based on jq output it seems to be a list.
                         if isinstance(data, dict) and "items" in data:
                             data = data["items"]
                         else:
-                            # If it's a single object or unknown, wrap it
                             data = [data] if data else []
 
                     # Client-side filtering to be safe
-                    if type_id is not None:
+                    if types is not None:
+                        target_types = types if isinstance(types, list) else [types]
                         filtered = []
                         for d in data:
-                            # Check 'Type' or 'type'
                             dtype = d.get("Type") or d.get("type")
-                            if dtype is not None and int(dtype) == type_id:
+                            if dtype is not None and int(dtype) in target_types:
                                 filtered.append(d)
                         return filtered
                     

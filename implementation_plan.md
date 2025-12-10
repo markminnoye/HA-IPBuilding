@@ -1,77 +1,57 @@
-# IPBuilding Home Assistant Integration Plan
+# Implementatieplan: Geoptimaliseerde Polling Strategie
 
-## Goal
-Integrate the IPBuilding home automation system into Home Assistant using its REST API. The integration will support Relays (Switches), Dimmers (Lights), Buttons, and potentially Regimes.
+Om de belasting op het netwerk en de IPBuilding controller te minimaliseren, implementeren we een **Dual-Coordinator Strategie**. In plaats van elk apparaat individueel te laten pollen of alles elke 30 seconden op te halen, splitsen we het verkeer in twee stromen.
 
-## User Review Required
-- **Access**: The integration requires network access to the IPBuilding controller (default port 30200).
-- **Authentication**: Need to confirm if the API requires an API key or authentication. (User provided URL implies open access or IP-based trust).
-- **Location**: Since the current workspace is `ESPHome`, I will generate the custom component files in a new directory `ipbuilding_integration` which you can then copy to your Home Assistant `custom_components` directory.
+## 1. De Strategie
 
-## Proposed Changes
+We maken gebruik van twee onafhankelijke `DataUpdateCoordinator` instanties in Home Assistant. Elke coordinator is verantwoordelijk voor een specifieke set apparaat-types.
 
-### Structure
-We will create a standard Home Assistant Custom Component structure:
+### A. Fast Coordinator (Hoge Prioriteit)
+Deze pollt frequent omdat deze stati direct zichtbaar moeten zijn of snel veranderen.
 
-```text
-ipbuilding/
-  __init__.py
-  manifest.json
-  const.py
-  config_flow.py
-  api.py
-  light.py
-  switch.py
-  button.py
-  sensor.py
-```
+*   **Interval**: 30 seconden
+*   **API Call**: `GET /api/v1/comp/items?types=1,2,3,60,40,41,56,200`
+*   **Apparaat Types**:
+    *   Verlichting (Relais, Dimmers, LED, DMX)
+    *   Sensoren waarvan de waarde snel boeit (Energie, Temperatuur, Detectors)
+    *   Systeemstatus (Tijd, Regime)
 
-## Proposed Changes
+### B. Slow Coordinator (Lage Prioriteit)
+Deze pollt minder vaak, omdat deze apparaten zelden van status veranderen of "stateless" zijn (zoals knoppen die alleen events sturen, of scenes die je activeert maar niet echt een 'aan' status hebben).
 
-### Structure
-We will create a standard Home Assistant Custom Component structure in a local directory `ipbuilding_integration/custom_components/ipbuilding`. You will need to copy the `ipbuilding` folder to your Home Assistant `config/custom_components/` directory.
+*   **Interval**: 300 seconden (5 minuten)
+*   **API Call**: `GET /api/v1/comp/items?types=50,100,101,70,80`
+*   **Apparaat Types**:
+    *   Bediening (Buttons)
+    *   Scenes (Sferen)
+    *   Toegang (Card readers, codesloten)
+    *   Logica (Programma's)
 
-### Component Details
+## 2. Technische Implementatie
 
-#### [NEW] [api.py](file:///Users/markminnoye/git/HA IPBuilding/custom_components/ipbuilding/api.py)
-- **Assumptions**:
-    - API is accessible without auth.
-    - `GET /api/v1/comp/items` returns a list of devices.
-    - `GET /api/v1/action/action?id={id}&actionType={ACTION}&value={value}` (or similar) sets device state. See https://www.postman.com/soft-techbv/ipbrestapi-s-public-workspace/request/6uctjo4/send-an-action for details. Actions include ON, OFF, TOGGLE, DIM.
-- **Functionality**:
-    - `get_devices(type_ids)`: Fetch devices.
-    - `set_value(device_id, value)`: Control device.
+### Stap 1: API Client Aanpassing (Gereed)
+De `get_devices` functie in `api.py` is aangepast zodat deze een lijst van types accepteert (bv. `[1, 2]`) en dit omzet naar een komma-gescheiden lijst voor de URL parameter (`?types=1,2`). Dit zorgt voor Server-Side Filtering, wat veel efficiënter is.
 
-#### [NEW] [config_flow.py](file:///Users/markminnoye/git/HA IPBuilding/custom_components/ipbuilding/config_flow.py)
-- Standard config flow to input Host (e.g., `192.168.0.185`) and Port (e.g., `30200`).
+### Stap 2: Coordinators Opzetten (Gereed)
+In `__init__.py` worden bij het opstarten twee coordinators aangemaakt:
+*   `coordinator_fast`
+*   `coordinator_slow`
 
-#### [NEW] [light.py](file:///Users/markminnoye/git/HA IPBuilding/custom_components/ipbuilding/light.py)
-- **Type 2 (Dimmer)**.
-- Maps 0-100% brightness to API values (likely 0-100 or 0-255).
+Deze halen bij start direct hun data op en plannen daarna hun eigen updates in.
 
-#### [NEW] [switch.py](file:///Users/markminnoye/git/HA IPBuilding/custom_components/ipbuilding/switch.py)
-- **Type 1 (Relais)**.
-- Simple On/Off control.
+### Stap 3: Componenten Migreren
+Elk platform (`light`, `switch`, etc.) krijgt bij het opstarten de juiste coordinator doorgegeven.
+*   **Lights & Switches**: Gebruiken `coordinator_fast`. (Migratie Gereed)
+*   **Buttons & Scenes**: Gebruiken `coordinator_slow`. (Migratie Gereed)
+*   **Sensors**: Moeten nog gemigreerd worden. Power sensors gaan naar `fast`, statische info kan eventueel naar `slow`.
 
-#### [NEW] [button.py](file:///Users/markminnoye/git/HA IPBuilding/custom_components/ipbuilding/button.py)
-- **Type 50 (Button)**.
-- Stateless button press.
+## 3. Voordelen
 
-#### [NEW] [sensor.py](file:///Users/markminnoye/git/HA IPBuilding/custom_components/ipbuilding/sensor.py)
-- **Type 56 (Time)**, **Type 200 (Regime)**.
-- Read-only state.
+1.  **Minder Netwerkverkeer**: We halen geen onnodige data op van knoppen of sferen elke 30 seconden.
+2.  **Responsiviteit**: Het pollen van verlichting blijft snel (of kan zelfs sneller als dat nodig is) zonder de overhead van honderden andere componenten.
+3.  **Schaalbaarheid**: Als je systeem groeit, blijft de performance goed omdat we gericht pollen.
 
-#### [NEW] [const.py](file:///Users/markminnoye/git/HA IPBuilding/custom_components/ipbuilding/const.py)
-- Constants for domain, default port, etc.
+## Volgende Stappen
 
-#### [NEW] [manifest.json](file:///Users/markminnoye/git/HA IPBuilding/custom_components/ipbuilding/manifest.json)
-- Component metadata.
-
-## Verification Plan
-### Manual Verification
-1.  Copy `ipbuilding_integration/custom_components/ipbuilding` to your Home Assistant `custom_components/` folder.
-2.  Restart Home Assistant.
-3.  Go to Settings -> Devices & Services -> Add Integration -> Search "IPBuilding".
-4.  Enter IP `192.168.0.185` and Port `30200`.
-5.  Check if devices are discovered.
-6.  **Critical**: Test controlling a light. If it fails, check logs for API errors (404/400) which would indicate my assumption about the `POST` endpoint is wrong.
+1.  Ik zal nu `sensor.py` ombouwen om ook gebruik te maken van de coordinators.
+2.  Daarna testen we of alle apparaten correct blijven updaten.

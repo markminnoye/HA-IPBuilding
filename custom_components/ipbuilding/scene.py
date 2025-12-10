@@ -6,6 +6,7 @@ from homeassistant.components.scene import Scene
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity, DataUpdateCoordinator
 
 from .const import DOMAIN, TYPE_SPHERE, TYPE_TEMP_SPHERE
 from .api import IPBuildingAPI
@@ -18,44 +19,49 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the IPBuilding scene platform."""
-    api: IPBuildingAPI = hass.data[DOMAIN][entry.entry_id]
-
+    data = hass.data[DOMAIN][entry.entry_id]
+    api: IPBuildingAPI = data["api"]
+    coordinator_slow: DataUpdateCoordinator = data["coordinator_slow"]
+    
     entities = []
     
-    # Fetch Sphere scenes
+    # Fetch Sphere scenes (Slow)
     try:
         sphere_devices = await api.get_devices(TYPE_SPHERE)
         for device in sphere_devices:
-            entities.append(IPBuildingScene(api, device))
+            entities.append(IPBuildingScene(coordinator_slow, api, device))
     except Exception as e:
         _LOGGER.error("Failed to fetch spheres: %s", e)
 
-    # Fetch TempSphere scenes
+    # Fetch TempSphere scenes (Slow)
     try:
         temp_sphere_devices = await api.get_devices(TYPE_TEMP_SPHERE)
         for device in temp_sphere_devices:
-            entities.append(IPBuildingScene(api, device))
+            entities.append(IPBuildingScene(coordinator_slow, api, device))
     except Exception as e:
         _LOGGER.error("Failed to fetch temp spheres: %s", e)
 
     async_add_entities(entities, True)
 
 
-class IPBuildingScene(Scene):
+class IPBuildingScene(CoordinatorEntity, Scene):
     """Representation of an IPBuilding Scene (Sphere)."""
 
     _attr_has_entity_name = True
 
-    def __init__(self, api: IPBuildingAPI, device: dict) -> None:
+    def __init__(self, coordinator: DataUpdateCoordinator, api: IPBuildingAPI, device: dict) -> None:
         """Initialize the scene."""
+        super().__init__(coordinator)
         self._api = api
-        self._device = device
-        self._attr_unique_id = f"ipbuilding_scene_{device.get('ID') or device.get('id')}"
-        self._attr_name = device.get("Description") or device.get("name") or f"Scene {device.get('ID') or device.get('id')}"
+        self._device_id = device.get("ID") or device.get("id")
+        self._initial_device_data = device
+        
+        self._attr_unique_id = f"ipbuilding_scene_{self._device_id}"
+        self._attr_name = device.get("Description") or device.get("name") or f"Scene {self._device_id}"
         
         # Device Info
         self._attr_device_info = {
-            "identifiers": {(DOMAIN, f"scene_{device.get('ID') or device.get('id')}")},
+            "identifiers": {(DOMAIN, f"scene_{self._device_id}")},
             "name": self._attr_name,
             "manufacturer": "IPBuilding",
             "model": "Scene",
@@ -65,26 +71,29 @@ class IPBuildingScene(Scene):
             self._attr_device_info["suggested_area"] = group.get("Name")
 
     @property
+    def _device_data(self) -> dict:
+        """Get the latest device data from coordinator."""
+        return self.coordinator.data.get(self._device_id, self._initial_device_data)
+
+    @property
     def available(self) -> bool:
         """Return if entity is available."""
-        # Use Visible property from API, default to True
-        return self._device.get("Visible", True)
+        return self.coordinator.last_update_success and self._device_data.get("Visible", True)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return the state attributes."""
+        d = self._device_data
         return {
-            "IpAddress": self._device.get("IpAddress"),
-            "Port": self._device.get("Port"),
-            "Protocol": self._device.get("Protocol"),
-            "ID": self._device.get("ID") or self._device.get("id"),
-            "Status": self._device.get("Status"),
-            "Output": self._device.get("Output"),
-            "Kind": self._device.get("Kind"),
+            "IpAddress": d.get("IpAddress"),
+            "Port": d.get("Port"),
+            "Protocol": d.get("Protocol"),
+            "ID": self._device_id,
+            "Status": d.get("Status"),
+            "Output": d.get("Output"),
+            "Kind": d.get("Kind"),
         }
 
     async def async_activate(self, **kwargs: Any) -> None:
         """Activate the scene."""
-        # Assuming activating a scene is done by setting its value to 1 or calling an action
-        # Similar to buttons, we'll try setting value to 1 with actionType ON
-        await self._api.set_value(self._device.get('ID') or self._device.get('id'), 1, "ON")
+        await self._api.set_value(self._device_id, 1, "ON")

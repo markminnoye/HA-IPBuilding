@@ -26,9 +26,31 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     
     # Lazy import to avoid blocking the event loop during component loading
     from .api import IPBuildingAPI
+    from .coordinator import IPBuildingCoordinator
+    from .const import (
+        FAST_POLL_INTERVAL, SLOW_POLL_INTERVAL,
+        FAST_POLL_TYPES, SLOW_POLL_TYPES
+    )
+    
     api = IPBuildingAPI(host, port, session)
 
-    hass.data[DOMAIN][entry.entry_id] = api
+    # Initialize Coordinators
+    coordinator_fast = IPBuildingCoordinator(
+        hass, api, FAST_POLL_TYPES, FAST_POLL_INTERVAL, "fast"
+    )
+    coordinator_slow = IPBuildingCoordinator(
+        hass, api, SLOW_POLL_TYPES, SLOW_POLL_INTERVAL, "slow"
+    )
+
+    # Fetch initial data so we have something before entities start
+    await coordinator_fast.async_config_entry_first_refresh()
+    await coordinator_slow.async_config_entry_first_refresh()
+
+    hass.data[DOMAIN][entry.entry_id] = {
+        "api": api,
+        "coordinator_fast": coordinator_fast,
+        "coordinator_slow": coordinator_slow,
+    }
 
     # Create Hub Devices for Grouping
     from homeassistant.helpers import device_registry as dr
@@ -44,6 +66,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     
     # Fetch all devices once to determine which types are present
     try:
+        # Re-use fast coordinator data if possible, or fetch anew. 
+        # Since we just refreshed, we might combine or just fetch "all" once safely.
+        # But api.get_devices() without args fetches ALL.
         all_devices = await api.get_devices()
     except Exception as e:
         _LOGGER.warning("Failed to fetch devices for hub creation: %s", e)

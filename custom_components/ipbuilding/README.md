@@ -1,151 +1,92 @@
-# IPBuilding Custom Component
+# IPBuilding Home Assistant Integration
 
-## Overview
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
+[![GitHub release](https://img.shields.io/github/v/release/markminnoye/ipbuilding?include_prereleases&style=flat-square)](https://github.com/markminnoye/ipbuilding/releases)
 
-This Home Assistant custom component provides integration with the IPBuilding system. It allows you to control dimmers, retrieve sensor data, and trigger custom actions via the IPBuilding REST API.
+The `ipbuilding` component allows you to integrate your [IPBuilding](https://ipbuilding.com/) home automation system into Home Assistant. It automatically discovers and controls lights, switches, scenes, sensors, and more.
 
-## Supported Platforms
+## Features
 
-The integration automatically discovers and creates entities for the following IPBuilding device types:
+*   **Automatic Discovery**: Automatically finds all configured devices in your IPBuilding system.
+*   **Device Support**:
+    *   **Lights**: Dimmers and Relays (configured as lights).
+    *   **Switches**: Outlets, locks, fans, valves, and other relay-based devices.
+    *   **Sensors**: Temperature, Motion, Energy, Weather, Time, and Regime.
+    *   **Covers/Screens**: (Future support planned).
+    *   **Climate**: Thermostats (Future support planned).
+*   **Scene Support**: Activates Spheres and TempSpheres directly from Home Assistant.
+*   **Grouping**: Devices are automatically organized into Hubs (e.g., "IPBuilding Dimmers", "IPBuilding Relays") while maintaining their Room/Area assignments.
+*   **Power Monitoring**: Automatically creates power sensors for devices that have a configured wattage in IPBuilding.
+*   **Real-time Updates**: States are updated via polling (configurable).
 
-- **Lights**: Dimmers (Type 2) and Relays with Kind=1 (Type 1)
-- **Switches**: Relays (Type 1) with Kind≠1 (outlets, locks, fans, valves, etc.)
-- **Sensors**: 
-  - Time sensors (Type 56)
-  - Regime sensors (Type 200)
-  - Power sensors (automatically created for devices with `Watt` attribute)
-- **Buttons**: Button devices (Type 50)
-- **Scenes**: Sphere (Type 100) and TempSphere (Type 101) devices
+## Installation
 
-## Important API Endpoints
+### Option 1: HACS (Recommended)
 
-### Dimmer Control
+1.  Open **HACS** in Home Assistant.
+2.  Go to **Integrations** > **Three dots (top right)** > **Custom repositories**.
+3.  Add `https://github.com/markminnoye/ipbuilding` with category **Integration**.
+4.  Click **Add** and then install the **IPBuilding** integration.
+5.  Restart Home Assistant.
 
-- **Endpoint**: `GET http://192.168.0.185:30200/api/v1/action/action?id=571&actionType=DIM&value=10`
-- **Description**: Sets the dimmer with ID `571` to a value of `10` (range depends on your device).
+### Option 2: Manual Installation
 
-### Other Useful Endpoints
+1.  Download the latest release.
+2.  Copy the `custom_components/ipbuilding` directory to your Home Assistant's `custom_components` directory.
+3.  Restart Home Assistant.
 
-- **Send an Action**: https://www.postman.com/soft-techbv/ipbrestapi-s-public-workspace/request/6uctjo4/send-an-action
-- **Client Command**: https://www.postman.com/soft-techbv/ipbrestapi-s-public-workspace/request/mgu7sxs/client-commando
-- **Temperature Deviation**: https://www.postman.com/soft-techbv/ipbrestapi-s-public-workspace/request/51zmehz/temperature-deviation
-- **Trigger Custom Item Action**: https://www.postman.com/soft-techbv/ipbrestapi-s-public-workspace/request/h59aed0/trigger-customitem-action
-- **Get Version**: https://www.postman.com/soft-techbv/ipbrestapi-s-public-workspace/request/2ygfarm/get-version
+## Configuration
 
-These links point to the official Postman documentation for the IPBuilding REST API and provide detailed request/response examples.
+1.  Go to **Settings** > **Devices & Services**.
+2.  Click **Add Integration** in the bottom right corner.
+3.  Search for **IPBuilding**.
+4.  Enter the **Host** (IP address) and **Port** of your IPBuilding system (e.g., `192.168.0.185` and `30200`).
+5.  Click **Submit**.
 
-## Usage in Home Assistant
+Your devices will immediately appear in Home Assistant.
 
-The component exposes services that wrap these API calls. Refer to the component's `services.yaml` (if present) or the code in `api.py` for the exact service names and parameters.
+## Supported Devices
 
-### Entity Features
+The integration maps IPBuilding "Types" and "Kinds" to Home Assistant entities:
 
-#### State Visibility
-For a cleaner UI, certain entity types have their state display hidden by default:
-- **Buttons**: All button entities have state display disabled (`entity_registry_visible_default = False`)
-- **Power Sensors**: Energy/power sensors created from the `Watt` attribute also hide state display by default
+| IPBuilding Type      | HA Entity      | Description                                           |
+| :------------------- | :------------- | :---------------------------------------------------- |
+| **Relay (1)**        | Light / Switch | Mapped to Light if Kind is 'Light', otherwise Switch. |
+| **Dimmer (2)**       | Light          | Supports brightness control.                          |
+| **Button (50)**      | Button         | Stateless button to trigger events.                   |
+| **Time (56)**        | Sensor         | System time sensor.                                   |
+| **Regime (200)**     | Sensor         | Current regime (Day/Night/Away/etc).                  |
+| **Sphere (100)**     | Scene          | Activates a pre-defined scene.                        |
+| **TempSphere (101)** | Scene          | Temporary scene.                                      |
+| **Energy (40/41)**   | Sensor         | Energy counters and meters.                           |
+| **Analog (53)**      | Sensor         | Generic analog sensors.                               |
 
-These entities remain functional but don't clutter the dashboard with unnecessary state information.
+### Device Organization
 
-#### Visible Property
-The integration respects the `Visible` property from the IPBuilding API. Entities with `"Visible": false` will be marked as unavailable in Home Assistant.
+Devices are organized in two ways:
+1.  **By Room**: Each device tells Home Assistant which room it belongs to (via the IPBuilding "Group" property).
+2.  **By Category**: Devices are also linked to virtual Hubs (e.g., "IPBuilding Dimmers") to easily view all devices of a certain type.
 
-#### Power Monitoring
-The component automatically creates power sensor entities for any Relay or Dimmer device that has a `Watt` attribute. These sensors:
-- Use the `sensor` device class for power measurement
-- Report power in Watts (W)
-- Can be used in Home Assistant's Energy Dashboard
-- Are linked to the same device group as their parent entity
+## Advanced Usage
 
-#### Device Grouping
-All entities are automatically grouped by their IPBuilding `Group` property:
-- Each entity is linked to a device based on `Group.ID` and `Group.Name`
-- This allows you to organize entities by room/area in Home Assistant
-- The device manufacturer is set to "IPBuilding"
+### Entity Visibility
+*   **Visible Property**: If a device is hidden in IPBuilding (Visible=False), it will be marked as `unavailable` in Home Assistant.
+*   **Buttons**: Button entities are disabled by default to avoid clutter. You can enable them in the entity settings.
 
-#### Entity Attributes
-All entities expose the following IPBuilding properties as attributes:
-- `IpAddress`: IP address of the physical device
-- `Port`: Port number
-- `Protocol`: Communication protocol
-- `ID`: IPBuilding device ID
-- `Status`: Current device status
-- `Output`: Output configuration
-- `Kind`: Device kind/subtype (see Kinds table below)
+### Power Sensors
+For every device that has a `Watt` value configured in IPBuilding, a corresponding power sensor (sensor.device_name_power) is created. This allows for easy integration with the Home Assistant Energy Dashboard.
 
-## Development
+## Troubleshooting
 
-For local development, see the top‑level `DEVELOPMENT.md` which contains instructions on setting up a virtual environment and running Home Assistant locally.
+Enable debug logging to see what's happening under the hood:
 
-## API Documentation
-
-### Postman Collection
-A fork of the original Postman collection is available here:
-https://web.postman.co/workspace/baebca0c-0802-4854-833a-7eb222d1a9b7/collection/1366031-733ffb24-a5bd-4883-a3cb-8a04fbc7e7a2
-
-### Types
-
-| Type | Object          |
-| ---- | --------------- |
-| 1    | Relais          |
-| 2    | Dimmer          |
-| 3    | Dmx             |
-| 40   | EnergyCounter   |
-| 41   | EnergyMeter     |
-| 50   | Button          |
-| 51   | Temperature     |
-| 52   | Detector        |
-| 53   | Analog sensor   |
-| 54   | KMI             |
-| 55   | Weather station |
-| 56   | Time of system  |
-| 60   | Led             |
-| 70   | AccessReader    |
-| 80   | AccessKey       |
-| 100  | Sphere          |
-| 101  | TempSphere      |
-| 102  | Prog            |
-| 103  | AccessControl   |
-| 150  | Script          |
-| 200  | Regime          |
-
-### Kinds
-
-The `Kind` property determines the specific subtype of a device:
-
-| Type | Object              |
-| ---- | ------------------- |
-| 1    | Licht               |
-| 2    | Stopkontakt         |
-| 3    | Automatisering      |
-| 4    | Slot                |
-| 5    | Ventilator          |
-| 6    | Klep                |
-| 7    | Temperatuur         |
-| 8    | Niet van toepassing |
-
-
-### Example Device Object
-
-```json
-{
-    "__type": "Relais:IPBuilding",
-    "ID": 547,
-    "Type": 1,
-    "Kind": 1,
-    "Description": "Keuken LED [30.1.1]",
-    "Group": {
-        "ID": 4,
-        "Name": "Keuken"
-    },
-    "IpAddress": "10.10.1.30",
-    "Port": 1001,
-    "Protocol": 0,
-    "Visible": true,
-    "MobileIcon": 0,
-    "MobileVisible": true,
-    "Output": 0,
-    "Status": 0,
-    "Watt": 0
-}
+```yaml
+logger:
+  default: info
+  logs:
+    custom_components.ipbuilding: debug
 ```
+
+## Credits
+
+Created by [Mark Minnoye](https://github.com/markminnoye).
