@@ -15,12 +15,15 @@ class IPBuildingAPI:
         self._session = session
         self._base_url = f"http://{host}:{port}/api/v1"
 
-    async def get_devices(self, type_id: int = None):
+    async def get_devices(self, types=None):
         """Get devices, optionally filtered by type."""
         url = f"{self._base_url}/comp/items"
         params = {}
-        if type_id is not None:
-            params["types"] = type_id
+        if types is not None:
+            if isinstance(types, list):
+                params["types"] = ",".join(str(t) for t in types)
+            else:
+                params["types"] = types
 
         try:
             async with async_timeout.timeout(10):
@@ -39,12 +42,14 @@ class IPBuildingAPI:
                             data = [data] if data else []
 
                     # Client-side filtering to be safe
-                    if type_id is not None:
+                    if types is not None:
                         filtered = []
+                        allowed_types = set(types) if isinstance(types, list) else {types}
+                        
                         for d in data:
                             # Check 'Type' or 'type'
                             dtype = d.get("Type") or d.get("type")
-                            if dtype is not None and int(dtype) == type_id:
+                            if dtype is not None and int(dtype) in allowed_types:
                                 filtered.append(d)
                         return filtered
                     
