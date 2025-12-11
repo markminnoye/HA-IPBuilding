@@ -124,10 +124,18 @@ class IPBuildingSwitch(CoordinatorEntity, SwitchEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the switch on."""
-        await self._api.set_value(self._device_id, 1, "ON") # Assuming 1 is ON
-        await self.coordinator.async_request_refresh()
+        # Optimistic update: immediately update local state
+        self.coordinator.data[self._device_id]["Value"] = 1
+        self.coordinator.data[self._device_id]["Status"] = 1
+        self.async_write_ha_state()
+        
+        await self._api.set_value(self._device_id, 1, "ON")
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the switch off."""
-        await self._api.set_value(self._device_id, 0, "OFF") # Assuming 0 is OFF
-        await self.coordinator.async_request_refresh()
+        # Optimistic update: immediately update local state
+        self.coordinator.data[self._device_id]["Value"] = 0
+        self.coordinator.data[self._device_id]["Status"] = 0
+        self.async_write_ha_state()
+        
+        await self._api.set_value(self._device_id, 0, "OFF")

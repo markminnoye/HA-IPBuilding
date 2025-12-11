@@ -139,15 +139,27 @@ class IPBuildingLight(CoordinatorEntity, LightEntity):
             val = int(brightness * 100 / 255)
             if val == 0 and brightness > 0:
                 val = 1
+            
+            # Optimistic update: immediately update local state
+            self.coordinator.data[self._device_id]["Value"] = val
+            self.coordinator.data[self._device_id]["Status"] = val
+            self.async_write_ha_state()
+            
             await self._api.set_value(self._device_id, val, "DIM")
         else:
+            # Optimistic update: immediately update local state
+            self.coordinator.data[self._device_id]["Value"] = 1
+            self.coordinator.data[self._device_id]["Status"] = 1
+            self.async_write_ha_state()
+            
             await self._api.set_value(self._device_id, 1, "ON")
-
-        # Request refresh to update state
-        await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the light off."""
+        # Optimistic update: immediately update local state
+        self.coordinator.data[self._device_id]["Value"] = 0
+        self.coordinator.data[self._device_id]["Status"] = 0
+        self.async_write_ha_state()
+        
         await self._api.set_value(self._device_id, 0, "OFF")
-        await self.coordinator.async_request_refresh()
 
