@@ -18,7 +18,8 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the IPBuilding scene platform."""
-    api: IPBuildingAPI = hass.data[DOMAIN][entry.entry_id]
+    data = hass.data[DOMAIN][entry.entry_id]
+    api: IPBuildingAPI = data["api"]
 
     entities = []
     
