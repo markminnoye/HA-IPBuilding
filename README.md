@@ -4,6 +4,10 @@ Home Assistant custom integration for **IPBuilding** smart living systems.
 
 This integration lets you control IPBuilding-driven functions such as lights, scenes (sferen), ventilation, zone heating and other building automation features directly from Home Assistant.
 
+> This integration communicates directly with the **IPBox** controller over its IP-based API.  
+> Other IPBuilding hardware (switch modules, dimmers, etc.) is not accessed individually; all
+> control happens via the IPBox.
+
 ## Features
 
 - Discover and control IPBuilding **lights** and **switches**
@@ -16,9 +20,10 @@ This integration lets you control IPBuilding-driven functions such as lights, sc
 
 ## Requirements
 
-- A working IPBuilding installation with network access from your Home Assistant instance
-- API / controller access to IPBuilding (IP address/hostname, port and credentials, depending on your setup)
-- Home Assistant 2024.x or newer (adjust if you support older versions)
+- A working IPBuilding installation with an **IPBox** controller
+- Network access from your Home Assistant instance to the IPBox
+- API/controller access on the IPBox (IP address/hostname, port and credentials, depending on your setup)
+- Home Assistant 2024.x or newer 
 
 ## Installation
 
